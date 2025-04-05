@@ -1,28 +1,54 @@
-name: CI/CD Pipeline
+name: Validación de Pull Request
 
 on:
-  push:
-    branches: [main, develop, qa]
   pull_request:
-    branches: [main, develop, qa]
+    types: [opened, edited, synchronize]
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout del código
+        uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Verificar nombre y destino del PR
+        run: |
+          echo "Validando rama origen y destino del Pull Request..."
+
+          SOURCE_BRANCH="${{ github.head_ref }}"
+          TARGET_BRANCH="${{ github.base_ref }}"
+
+          echo "Origen: $SOURCE_BRANCH"
+          echo "Destino: $TARGET_BRANCH"
+
+          # Reglas de validación para el Pull Request
+          if [[ "$SOURCE_BRANCH" == feature/* && "$TARGET_BRANCH" != "dev" ]]; then
+            echo "❌ ERROR: Las ramas feature/* deben ir hacia dev"
+            exit 1
+          elif [[ "$SOURCE_BRANCH" == fix/qa-* && "$TARGET_BRANCH" != "qa" ]]; then
+            echo "❌ ERROR: Las ramas fix/qa-* deben ir hacia qa"
+            exit 1
+          elif [[ "$SOURCE_BRANCH" == hotfix/* && "$TARGET_BRANCH" != "main" ]]; then
+            echo "❌ ERROR: Las ramas hotfix/* deben ir hacia main"
+            exit 1
+          else
+            echo "✅ Pull Request válido"
+          fi
+
+  run_tests:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v3
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v3
         with:
-          node-version: '20'
+          node-version: '16'  
 
-      - name: Install dependencies
+      - name: Instalar dependencias
         run: npm install
 
-      - name: Deploy based on branch
-        env:
-          TARGET_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
-        run: |
-          
+      - name: Ejecutar pruebas
+        run: npm test  
